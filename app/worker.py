@@ -7,6 +7,7 @@ import logging
 import os
 import random
 import signal
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -96,6 +97,7 @@ class PaymentWorker:
         payment_id = message.get("payment_id") or message.get("id")
         if not payment_id:
             raise ValueError("payment event has no payment_id")
+        payment_id = uuid.UUID(str(payment_id))
 
         async with self._session_factory() as session:
             payment = await session.scalar(select(Payment).where(Payment.id == payment_id))

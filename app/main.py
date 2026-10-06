@@ -79,9 +79,9 @@ async def create_payment(
     session: AsyncSession = Depends(get_session),
 ) -> PaymentAccepted:
     if idempotency_key is None or not idempotency_key.strip():
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Idempotency-Key is required")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Idempotency-Key is required")
     if len(idempotency_key) > 255:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Idempotency-Key is too long")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Idempotency-Key is too long")
 
     key = idempotency_key.strip()
     existing = await session.scalar(select(Payment).where(Payment.idempotency_key == key))

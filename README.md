@@ -69,6 +69,7 @@ API ─(одна транзакция)─> payments + outbox ─> outbox publish
 ## Полезные команды
 
 ```bash
+uv run pytest   # тесты; нужен запущенный postgres из compose (база payments_test)
 docker compose logs -f api consumer
 docker compose exec api alembic upgrade head
 docker compose down -v   # остановить и удалить данные
