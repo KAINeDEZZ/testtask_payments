@@ -9,11 +9,20 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.community.postgres import PostgresContainer
 
+from app.config import get_settings
 from app.db import get_session
 from app.main import app
 from app.models import Base
 
 API_KEY = os.environ["API_KEY"]
+
+
+@pytest.fixture(autouse=True)
+def fresh_settings():
+    # Settings are cached; tests that monkeypatch env vars need a fresh instance.
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture(scope="session")

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any
 from uuid import UUID
 
+from app.config import get_settings
 from faststream.rabbit import ExchangeType, RabbitBroker, RabbitExchange, RabbitQueue
 
 
@@ -21,7 +21,7 @@ PAYMENTS_DLX_NAME = "payments.dlx"
 
 def _broker_url() -> str:
     """Return a single, easily configurable RabbitMQ connection URL."""
-    return os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+    return get_settings().rabbitmq_url
 
 
 payments_exchange = RabbitExchange(

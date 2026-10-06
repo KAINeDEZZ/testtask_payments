@@ -10,16 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import engine, get_session
 from app.dependencies import require_api_key
-from app.models import Base, Outbox, OutboxStatus, Payment, PaymentStatus
+from app.models import Outbox, OutboxStatus, Payment, PaymentStatus
 from app.schemas import PaymentAccepted, PaymentCreate, PaymentRead
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    # Production deployments use Alembic. Creating tables here keeps the service
-    # convenient to run in an empty local development database.
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    # The schema is managed by Alembic (applied before startup in compose).
     yield
     await engine.dispose()
 

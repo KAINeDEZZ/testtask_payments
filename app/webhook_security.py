@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
-import os
 from urllib.parse import urlsplit
+
+from app.config import get_settings
 
 
 def private_webhooks_allowed() -> bool:
     """Local development may opt in to webhooks on private/loopback hosts."""
-    return os.getenv("ALLOW_PRIVATE_WEBHOOKS", "false").lower() in {"1", "true", "yes"}
+    return get_settings().allow_private_webhooks
 
 
 def _is_public_ip(value: str) -> bool:

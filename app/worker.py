@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import random
 import signal
 import uuid
@@ -25,6 +24,7 @@ from app.messaging import (
     payments_exchange,
     payments_queue,
 )
+from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Payment, PaymentStatus
 from app.outbox import OutboxPublisher
@@ -36,33 +36,14 @@ ATTEMPT_HEADER = "x-attempt"
 FINAL_STATUSES = {"succeeded", "failed"}
 
 
-def _max_processing_attempts() -> int:
-    """Total consumer attempts before an event is dead-lettered (three by default)."""
-    try:
-        return max(1, int(os.getenv("PAYMENT_MAX_ATTEMPTS", "3")))
-    except ValueError:
-        return 3
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _success_rate() -> float:
-    try:
-        return min(1.0, max(0.0, float(os.getenv("PAYMENT_SUCCESS_RATE", "0.9"))))
-    except ValueError:
-        logger.warning("PAYMENT_SUCCESS_RATE must be a number; using 0.9")
-        return 0.9
 
 
-def _webhook_retries() -> int:
-    """Number of retries after the initial webhook attempt (three by default)."""
-    try:
-        configured = os.getenv("WEBHOOK_MAX_RETRIES", os.getenv("WEBHOOK_MAX_ATTEMPTS", "3"))
-        return max(0, int(configured))
-    except ValueError:
-        return 3
 
 
 async def deliver_webhook(url: str, body: dict[str, Any]) -> bool:
@@ -70,9 +51,9 @@ async def deliver_webhook(url: str, body: dict[str, Any]) -> bool:
     if not await resolves_to_public_address(url):
         logger.warning("Webhook %s resolves to a non-public address; not delivering", url)
         return False
-    retries = _webhook_retries()
-    attempts = retries + 1
-    timeout = float(os.getenv("WEBHOOK_TIMEOUT_SECONDS", "10"))
+    settings = get_settings()
+    attempts = settings.webhook_max_attempts + 1
+    timeout = settings.webhook_timeout_seconds
     async with httpx.AsyncClient(timeout=timeout) as client:
         for attempt in range(attempts):
             try:
@@ -110,7 +91,7 @@ class PaymentWorker:
             # The requested simulation has an observable 2–5-second asynchronous
             # delay and can be made deterministic in integration tests with env vars.
             await asyncio.sleep(random.uniform(2, 5))
-            status = "succeeded" if random.random() < _success_rate() else "failed"
+            status = "succeeded" if random.random() < get_settings().payment_success_rate else "failed"
             async with self._session_factory() as session:
                 # Conditional UPDATE: only one concurrent consumer can move the
                 # payment out of "pending"; a redelivery never overwrites the result.
@@ -160,7 +141,7 @@ def register_payment_consumer(session_factory: async_sessionmaker[AsyncSession])
         try:
             await worker.process(message)
         except Exception:
-            max_attempts = _max_processing_attempts()
+            max_attempts = get_settings().payment_max_attempts
             if attempt >= max_attempts:
                 logger.exception("Payment event failed %s attempts; sending it to the DLQ", attempt)
                 raise NackMessage(requeue=False)

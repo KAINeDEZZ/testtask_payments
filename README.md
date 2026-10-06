@@ -48,7 +48,7 @@ curl -i -X POST http://localhost:8000/api/v1/payments \
 API ─(одна транзакция)─> payments + outbox ─> outbox publisher ─> payments.new ─> consumer ─> статус + webhook
 ```
 
-- **Outbox.** Событие не теряется между коммитом и публикацией. После `OUTBOX_MAX_RETRIES` неудачных публикаций запись получает статус `failed`.
+- **Outbox.** Событие не теряется между коммитом и публикацией. Publisher арендует пачку записей (`locked_until`) в отдельной транзакции и публикует без открытого соединения с БД. После `OUTBOX_MAX_RETRIES` неудачных публикаций запись получает статус `failed`.
 - **Без двойной обработки.** Статус меняется условным `UPDATE ... WHERE status='pending'`, поэтому повторная доставка или параллельные consumer'ы не перезапишут результат.
 - **Webhook.** До 3 повторов с паузами 1, 2, 4 с. Факт доставки хранится в `payments.webhook_sent_at`: при сбое после смены статуса вебхук отправится при повторной обработке. Гарантия доставки — «хотя бы один раз».
 - **Ретраи и DLQ.** При ошибке сообщение публикуется повторно со счётчиком `x-attempt`. После `PAYMENT_MAX_ATTEMPTS` попыток оно уходит в `payments.new.dlq`.
@@ -64,6 +64,7 @@ API ─(одна транзакция)─> payments + outbox ─> outbox publish
 | `WEBHOOK_MAX_ATTEMPTS` | `3` | повторов вебхука |
 | `WEBHOOK_TIMEOUT_SECONDS` | `10` | таймаут вебхука |
 | `OUTBOX_MAX_RETRIES` | `10` | попыток публикации из outbox |
+| `OUTBOX_LOCK_SECONDS` | `30` | аренда записи outbox на время публикации |
 | `ALLOW_PRIVATE_WEBHOOKS` | `false` | разрешить локальные приёмники вебхуков |
 
 ## Полезные команды
