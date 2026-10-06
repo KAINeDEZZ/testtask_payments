@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-payments}
+      POSTGRES_USER: ${POSTGRES_USER:-payments}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-payments}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-payments}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-payments}
+    ports:
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  api:
+    build:
+      context: .
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://payments:payments@postgres:5432/payments}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://payments:payments@rabbitmq:5672/}
+      API_KEY: ${API_KEY:-change-me-in-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PAYMENT_SUCCESS_RATE: ${PAYMENT_SUCCESS_RATE:-0.9}
+      WEBHOOK_MAX_ATTEMPTS: ${WEBHOOK_MAX_ATTEMPTS:-3}
+      WEBHOOK_TIMEOUT_SECONDS: ${WEBHOOK_TIMEOUT_SECONDS:-10}
+      PAYMENT_MAX_ATTEMPTS: ${PAYMENT_MAX_ATTEMPTS:-3}
+      OUTBOX_MAX_RETRIES: ${OUTBOX_MAX_RETRIES:-10}
+      ALLOW_PRIVATE_WEBHOOKS: ${ALLOW_PRIVATE_WEBHOOKS:-false}
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+  consumer:
+    build:
+      context: .
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://payments:payments@postgres:5432/payments}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://payments:payments@rabbitmq:5672/}
+      API_KEY: ${API_KEY:-change-me-in-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      PAYMENT_SUCCESS_RATE: ${PAYMENT_SUCCESS_RATE:-0.9}
+      WEBHOOK_MAX_ATTEMPTS: ${WEBHOOK_MAX_ATTEMPTS:-3}
+      WEBHOOK_TIMEOUT_SECONDS: ${WEBHOOK_TIMEOUT_SECONDS:-10}
+      PAYMENT_MAX_ATTEMPTS: ${PAYMENT_MAX_ATTEMPTS:-3}
+      OUTBOX_MAX_RETRIES: ${OUTBOX_MAX_RETRIES:-10}
+      ALLOW_PRIVATE_WEBHOOKS: ${ALLOW_PRIVATE_WEBHOOKS:-false}
+    command: >
+      sh -c "alembic upgrade head && python -m app.worker"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
