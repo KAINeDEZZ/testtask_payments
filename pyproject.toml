@@ -25,4 +25,5 @@ asyncio_mode = "auto"
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "testcontainers[postgres]>=4.15.0",
 ]
